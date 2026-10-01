@@ -1,0 +1,129 @@
+# Age private key used to decrypt secrets locally. Override with the SOPS_AGE_KEY_FILE env var.
+export SOPS_AGE_KEY_FILE := env("SOPS_AGE_KEY_FILE", home_directory() / ".age/sops_age_key.txt")
+# Age public key used to encrypt secrets. CHANGE ME (or set the SOPS_AGE_PUBLICKEY env var).
+SOPS_AGE_PUBLICKEY := env("SOPS_AGE_PUBLICKEY", "age1REPLACE_ME")
+# Public URL of the doco-cd instance. CHANGE ME.
+DOCO_CD_URL := "https://doco-cd.example.com"
+
+import 'mtls.just'
+
+# List all available recipes with descriptions
+default:
+    @just --list
+
+API_KEY := `sops decrypt ../doco-cd/secrets.enc.env 2>/dev/null | grep API_SECRET= | cut -d '=' -f 2 || true`
+
+[group('system')]
+system-start:
+    @just docker-up ../doco-cd compose.main.yaml
+
+[group('system')]
+system-stop: stop-all
+    @echo "Stopped all apps"
+
+docker-down dir file="":
+    #!/usr/bin/env bash
+    cd {{dir}}
+    if [[ -f secrets.enc.env ]]; then
+        sops decrypt secrets.enc.env > .env
+    fi
+    docker compose {{ if file != "" { "-f " + file } else { "" } }} down
+    if [[ -f .env ]]; then
+        rm .env
+    fi
+
+docker-up dir file="":
+    #!/usr/bin/env bash
+    cd {{dir}}
+    if [[ -f secrets.enc.env ]]; then
+        echo "Using secrets.enc.env"
+        sops decrypt secrets.enc.env > .env
+        mv secrets.enc.env secrets.enc.env.tmp
+        mv .env secrets.enc.env
+    fi
+    docker compose {{ if file != "" { "-f " + file } else { "" } }} up -d
+    if [[ -f secrets.enc.env.tmp ]]; then
+        mv secrets.enc.env.tmp secrets.enc.env
+    fi
+
+# Stop doco-cd
+dcdstop:
+    @just docker-down ../doco-cd compose.main.yaml
+
+# Start doco-cd
+dcdstart:
+    @just docker-up ../doco-cd compose.main.yaml
+
+[private]
+dcd-tail container:
+    #!/usr/bin/env bash
+    docker logs {{container}} -f 2>&1 | jq -rR '
+        fromjson?
+        | ((.deploy.stack // .stack // "-") + "/" + (.container.name // "-"))[0:20] as $sn
+        | (.level // "-")[0:5] as $lvl
+        | "\(.time[0:19]) \($lvl)\(" " * (6 - ($lvl|length))) \($sn)\(" " * (21 - ($sn|length))) \(.msg)\(if .error then ": " + .error else "" end)\(if .trigger.ref then " (ref=" + .trigger.ref + ")" else "" end)"
+    '
+
+# Logs doco-cd (instance B)
+dcdl:
+    @just dcd-tail doco-cd
+
+# Logs doco-cd-updater (instance A)
+dcdul:
+    @just dcd-tail doco-cd-updater
+
+# Start all Docker Compose projects in subdirectories
+start-all: dcdstop
+    #!/usr/bin/env bash
+    for dir in */; do
+        if [[ -f "$dir/docker-compose.yml" ]] || [[ -f "$dir/compose.yaml" ]]; then
+            echo "Starting $dir..."
+            just docker-up "$dir"
+        fi
+    done
+
+
+# Stop all Docker Compose projects in subdirectories
+stop-all: dcdstop
+    #!/usr/bin/env bash
+    for dir in */; do
+        if [[ -f "$dir/docker-compose.yml" ]] || [[ -f "$dir/compose.yaml" ]]; then
+            echo "Stopping $dir..."
+            just docker-down "$dir"
+        fi
+    done
+
+encrypt file=".env":
+    sops encrypt --input-type dotenv --output-type dotenv --age {{SOPS_AGE_PUBLICKEY}} {{file}}
+
+[group('api')]
+api-projects:
+    @curl -s -H "x-api-key: {{API_KEY}}" {{DOCO_CD_URL}}/v1/api/projects \
+        | jq -r '["ID","Name","Status","Reason"], (.content[] | [.ID, .Name, .Status, .Reason]) | @tsv' \
+        | column -t
+
+# Project API (MODE optional: start|stop|restart; omit MODE for Project details)
+[group('api')]
+api-project PROJECT MODE='':
+    #!/usr/bin/env bash
+    if [[ -z "{{MODE}}" ]]; then
+        curl -s -H "x-api-key: {{API_KEY}}" "{{DOCO_CD_URL}}/v1/api/project/{{PROJECT}}" \
+            | jq
+    else
+        case "{{MODE}}" in
+            start|stop|restart) ;;
+            *)
+                echo "Invalid MODE '{{MODE}}'. Allowed: start, stop, restart" >&2
+                exit 1
+                ;;
+        esac
+
+        curl -s -H "x-api-key: {{API_KEY}}" "{{DOCO_CD_URL}}/v1/api/project/{{PROJECT}}/{{MODE}}" -X POST \
+            | jq
+    fi
+
+[group('api')]
+api-health:
+    @curl -s -H "x-api-key: {{API_KEY}}" {{DOCO_CD_URL}}/v1/health
+
+

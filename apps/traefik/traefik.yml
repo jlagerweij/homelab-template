@@ -1,0 +1,38 @@
+api:
+  dashboard: true
+entryPoints:
+  web:
+    address: ":80"
+    forwardedHeaders:
+      trustedIPs:
+        - 127.0.0.1/32
+        - 192.168.1.0/24  # CHANGE ME: your LAN subnet
+  web-secure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+    forwardedHeaders:
+      trustedIPs:
+        - 127.0.0.1/32
+        - 192.168.1.0/24  # CHANGE ME: your LAN subnet
+    transport:
+      respondingTimeouts:
+        readTimeout: 0
+        idleTimeout: 0
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: admin@example.com  # CHANGE ME: Let's Encrypt account email
+      storage: /data/acme.json
+      httpChallenge:
+        entryPoint: web
+log:
+  level: INFO
+providers:
+  docker:
+    exposedByDefault: false
+    network: proxy
+  file:
+    directory: /config
+    watch: true

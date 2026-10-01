@@ -1,0 +1,25 @@
+services:
+  app:
+    container_name: doco-cd-updater
+    environment:
+      TZ: Etc/UTC  # CHANGE ME: your timezone
+      POLL_CONFIG: |
+        - url: https://github.com/YOUR_GITHUB_USER/YOUR_HOMELAB_REPO.git  # CHANGE ME
+          reference: main
+          interval: 300
+          target: updater  # deploys the updater target on change
+      SCHEDULER_ENABLED: false  # disable scheduler on updater instance
+      SOPS_AGE_KEY_FILE: /run/secrets/sops_age_key
+    env_file:
+      - secrets.enc.env
+    image: ghcr.io/kimdre/doco-cd:0.121.0
+    restart: unless-stopped
+    secrets:
+      - sops_age_key
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/docker-data/doco-cd-updater/data:/data
+
+secrets:
+  sops_age_key:
+    file: /path/to/.age/sops_age_key.txt  # CHANGE ME: age private key on the Docker host

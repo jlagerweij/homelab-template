@@ -1,0 +1,52 @@
+networks:
+  proxy:
+    external: true
+
+services:
+  app:
+    container_name: doco-cd
+    deploy:
+      resources:
+        limits:
+          memory: '200M'
+    environment:
+      SOPS_AGE_KEY_FILE: /run/secrets/sops_age_key
+      TZ: Etc/UTC  # CHANGE ME: your timezone
+    env_file:
+      - secrets.enc.env
+    healthcheck:
+      test: [ "CMD", "/doco-cd", "healthcheck" ]
+      start_period: 15s
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    image: ghcr.io/kimdre/doco-cd:0.121.0
+    labels:
+      traefik.enable: "true"
+      traefik.http.services.doco-cd.loadbalancer.server.port: '80'
+
+      traefik.http.routers.doco-cd-http.entrypoints: web
+      traefik.http.routers.doco-cd-http.middlewares: redirect-to-https@file
+      traefik.http.routers.doco-cd-http.priority: 1
+      traefik.http.routers.doco-cd-http.rule: Host(`doco-cd.example.com`)
+
+      traefik.http.routers.doco-cd-https.entrypoints: web-secure
+      traefik.http.routers.doco-cd-https.priority: 1
+      traefik.http.routers.doco-cd-https.middlewares: secured@file
+      traefik.http.routers.doco-cd-https.rule: Host(`doco-cd.example.com`)
+
+      traefik.http.routers.doco-cd-https-api.entrypoints: web-secure
+      traefik.http.routers.doco-cd-https-api.priority: 99
+      traefik.http.routers.doco-cd-https-api.rule: Host(`doco-cd.example.com`) && PathPrefix(`/v1/`)
+    networks:
+      - proxy
+    restart: unless-stopped
+    secrets:
+      - sops_age_key
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/docker-data/doco-cd/data:/data
+
+secrets:
+  sops_age_key:
+    file: /path/to/.age/sops_age_key.txt  # CHANGE ME: age private key on the Docker host

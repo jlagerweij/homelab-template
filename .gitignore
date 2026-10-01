@@ -1,0 +1,12 @@
+# Decrypted secrets — never commit these
+.env
+*.env.tmp
+secrets.env
+*.p12
+*.key
+!*.key.enc
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store

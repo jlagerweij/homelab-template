@@ -1,0 +1,14 @@
+http:
+  middlewares:
+    secured:
+      chain:
+        middlewares:
+          - known-ips
+    known-ips:
+      ipAllowList:
+        sourceRange:
+          - 127.0.0.1/32
+          - 192.168.1.0/24  # CHANGE ME: your LAN subnet
+    redirect-to-https:
+      redirectScheme:
+        scheme: https

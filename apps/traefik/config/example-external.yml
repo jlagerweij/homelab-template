@@ -1,0 +1,26 @@
+# Example: expose a device on your LAN (router, NAS, printer...) that doesn't run in Docker.
+# Copy this file per device and adjust the hostname and URL.
+http:
+  routers:
+    router-http:
+      rule: Host(`router.example.com`)
+      service: router
+      entrypoints: web
+      middlewares:
+        - secured@file
+        - redirect-to-https@file
+    router-https:
+      rule: Host(`router.example.com`)
+      service: router
+      entrypoints: web-secure
+      middlewares:
+        - secured@file
+      tls:
+        certResolver: letsencrypt
+        # Uncomment to require a client certificate (see README → mTLS)
+        # options: mtls-clients@file
+  services:
+    router:
+      loadBalancer:
+        servers:
+          - url: 'http://192.168.1.1/'

@@ -1,0 +1,44 @@
+networks:
+  proxy:
+    external: true
+
+
+services:
+  traefik:
+    container_name: traefik
+    deploy:
+      resources:
+        limits:
+          memory: '300M'
+    healthcheck:
+      test: "nc -vz 127.0.0.1 80"
+      start_period: 3s
+      interval: 30s
+      timeout: 3s
+      retries: 5
+    image: traefik:v3.7.13
+    labels:
+      traefik.enable: "true"
+      traefik.http.services.dashboard.loadbalancer.server.port: 80
+
+      traefik.http.routers.dashboard-http.entrypoints: web
+      traefik.http.routers.dashboard-http.middlewares: redirect-to-https@file
+      traefik.http.routers.dashboard-http.rule: Host(`traefik.example.com`)
+
+      traefik.http.routers.dashboard-https.entrypoints: web-secure
+      traefik.http.routers.dashboard-https.rule: Host(`traefik.example.com`)
+      traefik.http.routers.dashboard-https.tls: true
+      traefik.http.routers.dashboard-https.service: api@internal
+      traefik.http.routers.dashboard-https.middlewares: secured@file
+    restart: unless-stopped
+    networks:
+      - proxy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /opt/docker-data/traefik/data:/data
+      - ./traefik.yml:/traefik.yml
+      - ./config:/config
+

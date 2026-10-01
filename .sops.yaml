@@ -1,0 +1,7 @@
+# Lets you run `sops encrypt <file>` without passing --age every time.
+# CHANGE ME: replace with your own age public key (from `age-keygen -y ~/.age/sops_age_key.txt`).
+creation_rules:
+  - path_regex: .*\.env$
+    age: age1REPLACE_ME
+  - path_regex: .*\.enc$
+    age: age1REPLACE_ME
