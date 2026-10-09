@@ -12,7 +12,7 @@ services:
       SOPS_AGE_KEY_FILE: /run/secrets/sops_age_key
     env_file:
       - secrets.enc.env
-    image: ghcr.io/kimdre/doco-cd:0.121.0
+    image: ghcr.io/kimdre/doco-cd:0.125.0
     restart: unless-stopped
     secrets:
       - sops_age_key

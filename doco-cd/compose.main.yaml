@@ -20,7 +20,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
-    image: ghcr.io/kimdre/doco-cd:0.121.0
+    image: ghcr.io/kimdre/doco-cd:0.125.0
     labels:
       traefik.enable: "true"
       traefik.http.services.doco-cd.loadbalancer.server.port: '80'
