@@ -1,0 +1,26 @@
+services:
+  renovate:
+    container_name: renovate
+    deploy:
+      resources:
+        limits:
+          memory: '2G'
+    environment:
+      RENOVATE_PLATFORM: github
+      RENOVATE_REPOSITORIES: YOUR_GITHUB_USER/YOUR_HOMELAB_REPO
+      RENOVATE_AUTODISCOVER: false
+      RENOVATE_ONBOARDING: false
+      RENOVATE_REQUIRE_CONFIG: required
+      RENOVATE_GIT_AUTHOR: Renovate Bot <renovate@example.com>
+      RENOVATE_BASE_DIR: /tmp/renovate
+      LOG_LEVEL: info
+      TZ: Etc/UTC
+    env_file: # RENOVATE_TOKEN, RENOVATE_HOST_RULES
+      - secrets.enc.env
+    image: ghcr.io/renovatebot/renovate:44.149.2
+    labels:
+      # Renovate runs once and exits; doco-cd starts a fresh container on this schedule
+      cd.doco.job.enabled: "true"
+      cd.doco.job.schedule: "@daily"
+      cd.doco.job.execution_mode: "one_off"
+    restart: "no"

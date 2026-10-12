@@ -1,0 +1,18 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommitTypeAll(build)",
+    ":semanticCommitScope(deps)"
+  ],
+  "timezone": "Etc/UTC",
+  "enabledManagers": ["docker-compose"],
+  "ignorePaths": ["apps/_disabled/**"],
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "matchPackageNames": ["ghcr.io/kimdre/doco-cd"],
+      "groupName": "doco-cd"
+    }
+  ]
+}

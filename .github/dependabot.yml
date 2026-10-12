@@ -1,8 +1,0 @@
-version: 2
-updates:
-  - package-ecosystem: "docker-compose"
-    directories:
-      - "/apps/*"
-      - "/doco-cd/*"
-    schedule:
-      interval: "daily"

@@ -5,6 +5,7 @@ A GitOps starter for a single Docker host: push to `main` and your apps are depl
 - **[doco-cd](https://github.com/kimdre/doco-cd)** deploys every Docker Compose project in `apps/` from this repository.
 - **[Traefik](https://traefik.io/)** is the reverse proxy, with Let's Encrypt certificates, an IP allowlist and optional mTLS client certificates.
 - **[SOPS](https://github.com/getsops/sops) + [age](https://github.com/FiloSottile/age)** encrypt secrets so they can be committed safely.
+- **[Renovate](https://docs.renovatebot.com/)** runs daily as a doco-cd job and opens pull requests for new image versions.
 - **[just](https://github.com/casey/just)** provides recipes for local operations.
 
 ## How it works
@@ -18,7 +19,7 @@ GitHub repo ◀──polls──  doco-cd-updater ──▶ .doco-cd.updater.yam
                                              └─ doco-cd/compose.main.yaml (redeploys doco-cd itself)
 ```
 
-Two doco-cd instances update each other, so a version bump of doco-cd (for example from Dependabot) also gets rolled out by Git:
+Two doco-cd instances update each other, so a version bump of doco-cd (for example from Renovate) also gets rolled out by Git:
 
 - **doco-cd** (`doco-cd/compose.main.yaml`) receives GitHub webhooks and deploys `.doco-cd.yaml`: the updater instance plus every directory in `apps/` that contains a compose file.
 - **doco-cd-updater** (`doco-cd/compose.updater.yaml`) polls the repository and deploys the `updater` target (`.doco-cd.updater.yaml`), which is the main doco-cd instance.
@@ -31,7 +32,7 @@ Secrets live next to each app as `secrets.enc.env` (SOPS-encrypted dotenv). doco
 .doco-cd.yaml               # deploy targets for the main doco-cd instance
 .doco-cd.updater.yaml       # deploy target for the updater instance
 .sops.yaml                  # SOPS creation rules (your age public key)
-.github/dependabot.yml      # keeps image tags in compose files up to date
+renovate.json               # Renovate config: keeps image tags in compose files up to date
 doco-cd/                    # both doco-cd instances + their secrets
 apps/
   justfile                  # local operations (start/stop, encrypt, doco-cd API)
@@ -39,6 +40,7 @@ apps/
   traefik/                  # example app: the reverse proxy
     traefik.yml             # static config
     config/                 # dynamic config (middlewares, TLS options, external routes)
+  renovate/                 # self-hosted Renovate, run daily by doco-cd
 ```
 
 ## Prerequisites
@@ -72,11 +74,11 @@ On the Docker host:
    |---|---|---|
    | `age1REPLACE_ME` | `.sops.yaml`, `apps/justfile` | your age public key |
    | `/path/to/.age/sops_age_key.txt` | `doco-cd/compose.*.yaml` | absolute path to the age private key on the host |
-   | `YOUR_GITHUB_USER/YOUR_HOMELAB_REPO` | `doco-cd/compose.updater.yaml` | your repository |
-   | `example.com` | Traefik labels, `apps/justfile`, `apps/traefik/config/*.yml` | your domain |
+   | `YOUR_GITHUB_USER/YOUR_HOMELAB_REPO` | `doco-cd/compose.updater.yaml`, `apps/renovate/compose.yaml` | your repository |
+   | `example.com` | Traefik labels, `apps/justfile`, `apps/traefik/config/*.yml`, `apps/renovate/compose.yaml` (commit author) | your domain |
    | `admin@example.com` | `apps/traefik/traefik.yml` | your Let's Encrypt account email |
    | `192.168.1.0/24` | `apps/traefik/traefik.yml`, `apps/traefik/config/http-middlewares.yml` | your LAN subnet |
-   | `Etc/UTC` | `doco-cd/compose.*.yaml` | your timezone |
+   | `Etc/UTC` | `doco-cd/compose.*.yaml`, `apps/renovate/compose.yaml`, `renovate.json` | your timezone |
 
    In `apps/justfile`, `SOPS_AGE_KEY_FILE` defaults to `~/.age/sops_age_key.txt` and can be overridden with an environment variable of the same name.
 
@@ -90,14 +92,24 @@ On the Docker host:
    ```
    Both doco-cd instances use this file. Commit `secrets.enc.env` and push.
 
-5. **Bootstrap** on the Docker host (clone the repository first):
+5. **Create the Renovate secrets:**
+   ```sh
+   cp apps/renovate/secrets.env.example apps/renovate/secrets.env
+   # fill in RENOVATE_TOKEN (and optionally RENOVATE_HOST_RULES)
+   cd apps
+   just encrypt renovate/secrets.env > renovate/secrets.enc.env
+   rm renovate/secrets.env
+   ```
+   Commit `secrets.enc.env`. The `renovate` app fails to deploy until this file exists. If you don't want Renovate, move it to `apps/_disabled/renovate`.
+
+6. **Bootstrap** on the Docker host (clone the repository first):
    ```sh
    cd apps
    just docker-up traefik
    just system-start          # starts doco-cd; from now on Git drives deployments
    ```
 
-6. **Add a GitHub webhook** (repository → Settings → Webhooks):
+7. **Add a GitHub webhook** (repository → Settings → Webhooks):
    - Payload URL: `https://doco-cd.example.com/v1/webhook`
    - Content type: `application/json`
    - Secret: the `WEBHOOK_SECRET` from step 4
